@@ -2,6 +2,12 @@
 ifneq (,$(filter asymcute,$(USEMODULE)))
   DIRS += net/application_layer/asymcute
 endif
+ifneq (,$(filter bpf,$(USEMODULE)))
+  DIRS += bpf
+endif
+ifneq (,$(filter csma_sender,$(USEMODULE)))
+  DIRS += net/link_layer/csma_sender
+endif
 ifneq (,$(filter bluetil_%,$(USEMODULE)))
   DIRS += net/ble/bluetil
 endif

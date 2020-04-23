@@ -14,8 +14,129 @@
 
 #include "bpf.h"
 #include "bpf/instruction.h"
+#include "bpf/store.h"
+#include "bpf/shared.h"
+#include "xtimer.h"
 
-uint32_t bpf_vm_printf(uint32_t fmt, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4)
+#include "net/gcoap.h"
+#include "net/nanocoap.h"
+#include "saul.h"
+#include "saul_reg.h"
+
+uint32_t bpf_vm_printf(bpf_t *bpf, uint32_t fmt, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
 {
-    return printf((char*)(uintptr_t)fmt, a1, a2, a3, a4);
+    (void)bpf;
+    return printf((char*)(uintptr_t)fmt, a2, a3, a4, a5);
+}
+
+uint32_t bpf_vm_store_local(bpf_t *bpf, uint32_t key, uint32_t value, uint32_t a3, uint32_t a4, uint32_t a5)
+{
+    (void)a3;
+    (void)a4;
+    (void)a5;
+    return (uint32_t)bpf_store_update_local(bpf, key, value);
+}
+
+uint32_t bpf_vm_store_global(bpf_t *bpf, uint32_t key, uint32_t value, uint32_t a3, uint32_t a4, uint32_t a5)
+{
+    (void)bpf;
+    (void)a3;
+    (void)a4;
+    (void)a5;
+    return (uint32_t)bpf_store_update_global(key, value);
+}
+
+uint32_t bpf_vm_fetch_local(bpf_t *bpf, uint32_t key, uint32_t value, uint32_t a3, uint32_t a4, uint32_t a5)
+{
+    (void)bpf;
+    (void)a3;
+    (void)a4;
+    (void)a5;
+    return (uint32_t)bpf_store_fetch_local(bpf, key, (uint32_t*)(uintptr_t)value);
+}
+
+uint32_t bpf_vm_fetch_global(bpf_t *bpf, uint32_t key, uint32_t value, uint32_t a3, uint32_t a4, uint32_t a5)
+{
+    (void)bpf;
+    (void)a3;
+    (void)a4;
+    (void)a5;
+    return (uint32_t)bpf_store_fetch_global(key, (uint32_t*)(uintptr_t)value);
+}
+
+uint32_t bpf_vm_now_ms(bpf_t *bpf, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
+{
+    (void)bpf;
+    (void)a1;
+    (void)a2;
+    (void)a3;
+    (void)a4;
+    (void)a5;
+    return xtimer_now_usec64()/US_PER_MS;
+}
+
+uint32_t bpf_vm_saul_reg_find_nth(bpf_t *bpf, uint32_t nth, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
+{
+    (void)bpf;
+    (void)a2;
+    (void)a3;
+    (void)a4;
+    (void)a5;
+    int pos = (int)nth;
+    saul_reg_t *reg = saul_reg_find_nth(pos);
+    return (uint32_t)(intptr_t)reg;
+}
+
+uint32_t bpf_vm_saul_reg_find_type(bpf_t *bpf, uint32_t type, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
+{
+    (void)bpf;
+    (void)a2;
+    (void)a3;
+    (void)a4;
+    (void)a5;
+
+    saul_reg_t *reg = saul_reg_find_type(type);
+    return (uint32_t)(intptr_t)reg;
+}
+
+uint32_t bpf_vm_saul_reg_read(bpf_t *bpf, uint32_t dev_p, uint32_t data_p, uint32_t a3, uint32_t a4, uint32_t a5)
+{
+    (void)bpf;
+    (void)a3;
+    (void)a4;
+    (void)a5;
+
+    saul_reg_t *dev = (saul_reg_t*)(intptr_t)dev_p;
+    phydat_t *data = (phydat_t*)(intptr_t)data_p;
+
+    int res = saul_reg_read(dev, data);
+    return (uint32_t)res;
+}
+
+uint32_t bpf_vm_gcoap_resp_init(bpf_t *bpf, uint32_t coap_ctx_p, uint32_t resp_code_u, uint32_t a3, uint32_t a4, uint32_t a5)
+{
+    (void)bpf;
+    (void)a3;
+    (void)a4;
+    (void)a5;
+
+    bpf_coap_ctx_t *coap_ctx = (bpf_coap_ctx_t *)(intptr_t)coap_ctx_p;
+    unsigned resp_code = (unsigned)resp_code_u;
+
+    gcoap_resp_init(coap_ctx->pkt, coap_ctx->buf, coap_ctx->buf_len, resp_code);
+    return 0;
+}
+
+uint32_t bpf_vm_coap_opt_finish(bpf_t *bpf, uint32_t coap_ctx_p, uint32_t flags_u, uint32_t a3, uint32_t a4, uint32_t a5)
+{
+    (void)bpf;
+    (void)a3;
+    (void)a4;
+    (void)a5;
+
+    bpf_coap_ctx_t *coap_ctx = (bpf_coap_ctx_t *)(intptr_t)coap_ctx_p;
+    uint16_t flags = (uint16_t)flags_u;
+
+    ssize_t res = coap_opt_finish(coap_ctx->pkt, flags);
+    return (uint32_t)res;
 }

@@ -15,9 +15,35 @@
 #include "bpf/instruction.h"
 #include "bpf/call.h"
 
-static bpf_call_t _bpf_calls[] = {
-    [BPF_FUNC_BPF_PRINTF] = &bpf_vm_printf,
-};
+static bpf_call_t _bpf_get_call(uint32_t num)
+{
+    switch(num) {
+        case BPF_FUNC_BPF_PRINTF:
+            return &bpf_vm_printf;
+        case BPF_FUNC_BPF_STORE_LOCAL:
+            return &bpf_vm_store_local;
+        case BPF_FUNC_BPF_STORE_GLOBAL:
+            return &bpf_vm_store_global;
+        case BPF_FUNC_BPF_FETCH_LOCAL:
+            return &bpf_vm_fetch_local;
+        case BPF_FUNC_BPF_FETCH_GLOBAL:
+            return &bpf_vm_fetch_global;
+        case BPF_FUNC_BPF_NOW_MS:
+            return &bpf_vm_now_ms;
+        case BPF_FUNC_BPF_SAUL_REG_FIND_NTH:
+            return &bpf_vm_saul_reg_find_nth;
+        case BPF_FUNC_BPF_SAUL_REG_FIND_TYPE:
+            return &bpf_vm_saul_reg_find_type;
+        case BPF_FUNC_BPF_SAUL_REG_READ:
+            return &bpf_vm_saul_reg_read;
+        case BPF_FUNC_BPF_GCOAP_RESP_INIT:
+            return &bpf_vm_gcoap_resp_init;
+        case BPF_FUNC_BPF_COAP_OPT_FINISH:
+            return &bpf_vm_coap_opt_finish;
+        default:
+            return NULL;
+    }
+}
 
 /* ALU type instructions */
 static int _alu64(uint8_t opcode, uint64_t *src, uint64_t *dst)
@@ -250,10 +276,9 @@ static int _instruction(bpf_t *bpf, uint64_t *regmap,
 int bpf_run(bpf_t *bpf, const void *ctx, int64_t *result)
 {
     uint64_t regmap[11] = { 0 };
-    bool end = false;
-
     regmap[1] = (uint64_t)(uintptr_t)ctx;
     regmap[10] = (uint64_t)(uintptr_t)(bpf->stack + bpf->stack_size);
+    bool end = false;
 
     const bpf_instruction_t *pc = (const bpf_instruction_t*)bpf->application;
 
@@ -261,11 +286,18 @@ int bpf_run(bpf_t *bpf, const void *ctx, int64_t *result)
         int res = _instruction(bpf, regmap, &pc);
         if (res < 0) {
             if (pc->opcode == 0x85) {
-                regmap[0] = (*(_bpf_calls + pc->immediate))(regmap[1],
-                                                         regmap[2],
-                                                         regmap[3],
-                                                         regmap[4],
-                                                         regmap[5]);
+                bpf_call_t call = _bpf_get_call(pc->immediate);
+                if (call) {
+                    regmap[0] = (*(call))(bpf,
+                                          regmap[1],
+                                          regmap[2],
+                                          regmap[3],
+                                          regmap[4],
+                                          regmap[5]);
+                }
+                else {
+                    return BPF_ILLEGAL_CALL;
+                }
             }
             else if (pc->opcode == 0x95) {
                 break;

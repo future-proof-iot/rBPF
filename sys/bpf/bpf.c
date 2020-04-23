@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include "assert.h"
 #include "bpf.h"
+#include "bpf/store.h"
 
 extern int bpf_run(bpf_t *bpf, const void *ctx, int64_t *result);
 
@@ -40,6 +41,11 @@ static void _register(bpf_hook_t **install_hook, bpf_hook_t *new)
 {
     new->next = *install_hook;
     *install_hook = new;
+}
+
+void bpf_init(void)
+{
+    bpf_store_init();
 }
 
 int bpf_hook_install(bpf_hook_t *hook, bpf_hook_trigger_t trigger) {

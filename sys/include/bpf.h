@@ -26,6 +26,7 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include "btree.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -49,13 +50,15 @@ enum {
     BPF_ILLEGAL_INSTRUCTION = -1,
     BPF_ILLEGAL_MEM         = -2,
     BPF_ILLEGAL_JUMP        = -3,
+    BPF_ILLEGAL_CALL        = -4,
 };
 
 typedef struct {
-    const uint8_t *application;
-    size_t application_len;
-    uint8_t *stack;     /**< VM stack, must be a multiple of 8 bytes and aligned */
-    size_t stack_size;  /**< VM stack size in bytes */
+    const uint8_t *application; /**< Application bytecode */
+    size_t application_len;     /**< Application length */
+    uint8_t *stack;             /**< VM stack, must be a multiple of 8 bytes and aligned */
+    size_t stack_size;          /**< VM stack size in bytes */
+    btree_t btree;              /**< Local btree */
 } bpf_t;
 
 typedef struct bpf_hook bpf_hook_t;
@@ -66,6 +69,8 @@ struct bpf_hook {
     uint32_t executions;
     bpf_hook_policy_t policy;
 };
+
+void bpf_init(void);
 
 int bpf_execute(bpf_t *bpf, void *ctx, int64_t *result);
 

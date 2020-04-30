@@ -45,6 +45,11 @@ ifneq (,$(filter base64url,$(USEMODULE)))
   USEMODULE += base64
 endif
 
+ifneq (,$(filter bpf,$(USEMODULE)))
+  USEMODULE += btree
+  USEMODULE += memarray
+endif
+
 ifneq (,$(filter csma_sender,$(USEMODULE)))
   USEMODULE += random
   USEMODULE += xtimer

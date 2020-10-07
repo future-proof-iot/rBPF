@@ -36,10 +36,12 @@ static bpf_call_t _bpf_get_call(uint32_t num)
             return &bpf_vm_saul_reg_find_type;
         case BPF_FUNC_BPF_SAUL_REG_READ:
             return &bpf_vm_saul_reg_read;
+#ifdef MODULE_GCOAP
         case BPF_FUNC_BPF_GCOAP_RESP_INIT:
             return &bpf_vm_gcoap_resp_init;
         case BPF_FUNC_BPF_COAP_OPT_FINISH:
             return &bpf_vm_coap_opt_finish;
+#endif
         default:
             return NULL;
     }

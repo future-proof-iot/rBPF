@@ -18,8 +18,10 @@
 #include "bpf/shared.h"
 #include "xtimer.h"
 
+#ifdef MODULE_GCOAP
 #include "net/gcoap.h"
 #include "net/nanocoap.h"
+#endif
 #include "saul.h"
 #include "saul_reg.h"
 
@@ -113,6 +115,7 @@ uint32_t bpf_vm_saul_reg_read(bpf_t *bpf, uint32_t dev_p, uint32_t data_p, uint3
     return (uint32_t)res;
 }
 
+#ifdef MODULE_GCOAP
 uint32_t bpf_vm_gcoap_resp_init(bpf_t *bpf, uint32_t coap_ctx_p, uint32_t resp_code_u, uint32_t a3, uint32_t a4, uint32_t a5)
 {
     (void)bpf;
@@ -140,3 +143,4 @@ uint32_t bpf_vm_coap_opt_finish(bpf_t *bpf, uint32_t coap_ctx_p, uint32_t flags_
     ssize_t res = coap_opt_finish(coap_ctx->pkt, flags);
     return (uint32_t)res;
 }
+#endif

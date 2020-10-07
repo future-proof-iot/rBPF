@@ -26,7 +26,7 @@
 # - llc/clang are available and support "bpf" target; check with "llc --verison"
 #
 
-OBJS = sample.o
+OBJS = btree.o sample_saul.o sample_storage.o fletcher32.o sample_test.o
 
 LLC ?= llc
 CLANG ?= clang
@@ -35,17 +35,8 @@ EXTRA_CFLAGS ?= -Os -emit-llvm
 
 RIOTBASE = ../../..
 
-BPFINCLUDE = -I$(RIOTBASE)/sys/include/
+BPFINCLUDE = -I$(RIOTBASE)/sys/include/ -I$(RIOTBASE)/drivers/include/ -I$(RIOTBASE)/core/include
 
-linuxhdrs ?= /usr/src/linux-`uname -r`
-
-LINUXINCLUDE =  -I$(linuxhdrs)/arch/x86/include/uapi \
-                -I$(linuxhdrs)/arch/x86/include/generated/uapi \
-                -I$(linuxhdrs)/include/generated/uapi \
-                -I$(linuxhdrs)/include/uapi \
-                -I$(linuxhdrs)/include \
-                -I$(linuxhdrs)/tools/include \
-                -I$(linuxhdrs)/arch/x86/include
 
 all: $(OBJS)
 
@@ -58,7 +49,7 @@ INC_FLAGS = -nostdinc -isystem `$(CLANG) -print-file-name=include`
 
 $(OBJS):  %.o:%.c
 	$(CLANG) $(INC_FLAGS) \
-	        -Wno-unused-value -Wno-pointer-sign \
+	        -Wno-unused-value -Wno-pointer-sign -g3 \
 	        -Wno-compare-distinct-pointer-types \
 	        -Wno-gnu-variable-sized-type-not-at-end \
 	        -Wno-address-of-packed-member -Wno-tautological-compare \

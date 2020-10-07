@@ -18,12 +18,21 @@
  *
  * @}
  */
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdint.h>
 #include "bpf.h"
+#include "bpf/store.h"
 #include "embUnit.h"
 
 #include "sample.h"
+#include "sample_storage.h"
+#include "sample_saul.h"
+
+#define BPF_SAMPLE_STORAGE_KEY_A  5
+#define BPF_SAMPLE_STORAGE_KEY_B  15
+#define BPF_SAMPLE_STORAGE_KEY_C  3
+#define BPF_SAMPLE_STORAGE_KEY_SENSE  1
 
 static uint8_t _bpf_stack[512];
 
@@ -58,6 +67,10 @@ static const uint8_t application[] = {
     0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* exit */
 };
 
+static void _init(void)
+{
+    bpf_init();
+}
 
 static void tests_bpf_run1(void)
 {
@@ -70,7 +83,7 @@ static void tests_bpf_run1(void)
     unsigned int ctx = 8;
     int64_t result = 0;
     TEST_ASSERT_EQUAL_INT(0, bpf_execute(&bpf, &ctx, &result));
-    printf("Result: %d\n", (int)result);
+    TEST_ASSERT_EQUAL_INT(105, (int)result);
 }
 
 static void tests_bpf_run2(void)
@@ -84,17 +97,71 @@ static void tests_bpf_run2(void)
     unsigned int ctx = 8;
     int64_t result = 0;
     TEST_ASSERT_EQUAL_INT(0, bpf_execute(&bpf, &ctx, &result));
-    printf("Result: %d\n", (int)result);
+    TEST_ASSERT_EQUAL_INT(16, (int)result);
 }
+
+static void tests_bpf_storage(void)
+{
+    bpf_t bpf = {
+        .application = bpf_sample_storage_bin,
+        .application_len = sizeof(bpf_sample_storage_bin),
+        .stack = _bpf_stack,
+        .stack_size = sizeof(_bpf_stack),
+    };
+    unsigned int ctx = 8;
+    int64_t result = 0;
+    TEST_ASSERT_EQUAL_INT(0, bpf_execute(&bpf, &ctx, &result));
+
+    uint32_t val;
+    bpf_store_fetch_local(&bpf, BPF_SAMPLE_STORAGE_KEY_A, &val);
+    TEST_ASSERT_EQUAL_INT(1, val);
+
+    bpf_store_fetch_local(&bpf, BPF_SAMPLE_STORAGE_KEY_B, &val);
+    TEST_ASSERT_EQUAL_INT(2, val);
+
+    bpf_store_fetch_local(&bpf, BPF_SAMPLE_STORAGE_KEY_C, &val);
+    TEST_ASSERT_EQUAL_INT(3, val);
+
+    /* Second execution */
+    TEST_ASSERT_EQUAL_INT(0, bpf_execute(&bpf, &ctx, &result));
+    bpf_store_fetch_local(&bpf, BPF_SAMPLE_STORAGE_KEY_A, &val);
+    TEST_ASSERT_EQUAL_INT(2, val);
+    bpf_store_fetch_local(&bpf, BPF_SAMPLE_STORAGE_KEY_B, &val);
+    TEST_ASSERT_EQUAL_INT(6, val);
+    bpf_store_fetch_local(&bpf, BPF_SAMPLE_STORAGE_KEY_C, &val);
+    TEST_ASSERT_EQUAL_INT(8, val);
+}
+
+static void tests_bpf_saul(void)
+{
+    bpf_t bpf = {
+        .application = bpf_sample_saul_bin,
+        .application_len = sizeof(bpf_sample_saul_bin),
+        .stack = _bpf_stack,
+        .stack_size = sizeof(_bpf_stack),
+    };
+    unsigned int ctx = 0;
+    int64_t result = 0;
+    TEST_ASSERT_EQUAL_INT(0, bpf_execute(&bpf, &ctx, &result));
+
+    TEST_ASSERT_EQUAL_INT(0, result);
+
+    uint32_t val = 0;
+    bpf_store_fetch_local(&bpf, BPF_SAMPLE_STORAGE_KEY_SENSE, &val);
+    printf("BPF saul val: %"PRIu32"\n", val);
+}
+
 
 Test *tests_bpf(void)
 {
     EMB_UNIT_TESTFIXTURES(fixtures) {
         new_TestFixture(tests_bpf_run1),
         new_TestFixture(tests_bpf_run2),
+        new_TestFixture(tests_bpf_storage),
+        new_TestFixture(tests_bpf_saul),
     };
 
-    EMB_UNIT_TESTCALLER(bpf_tests, NULL, NULL, fixtures);
+    EMB_UNIT_TESTCALLER(bpf_tests, _init, NULL, fixtures);
     return (Test*)&bpf_tests;
 }
 

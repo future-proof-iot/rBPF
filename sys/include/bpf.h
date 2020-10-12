@@ -53,7 +53,23 @@ enum {
     BPF_ILLEGAL_CALL        = -4,
 };
 
+typedef struct bpf_mem_region bpf_mem_region_t;
+
+#define BPF_MEM_REGION_READ     0x01
+#define BPF_MEM_REGION_WRITE    0x02
+#define BPF_MEM_REGION_EXEC     0x04
+
+
+struct bpf_mem_region {
+    bpf_mem_region_t *next;
+    const uint8_t *start;
+    size_t len;
+    uint8_t flag;
+};
+
 typedef struct {
+    bpf_mem_region_t stack_region;
+    bpf_mem_region_t arg_region;
     const uint8_t *application; /**< Application bytecode */
     size_t application_len;     /**< Application length */
     uint8_t *stack;             /**< VM stack, must be a multiple of 8 bytes and aligned */
@@ -72,7 +88,7 @@ struct bpf_hook {
 
 void bpf_init(void);
 
-int bpf_execute(bpf_t *bpf, void *ctx, int64_t *result);
+int bpf_execute(bpf_t *bpf, void *ctx, size_t ctx_size, int64_t *result);
 
 int bpf_install_hook(bpf_t *bpf);
 

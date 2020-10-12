@@ -32,8 +32,18 @@ static bool _continue(bpf_hook_t *hook, int64_t *res)
     return true;
 }
 
-int bpf_execute(bpf_t *bpf, void *ctx, int64_t *result)
+int bpf_execute(bpf_t *bpf, void *ctx, size_t ctx_len, int64_t *result)
 {
+    bpf->stack_region.start = bpf->stack;
+    bpf->stack_region.len = bpf->stack_size;
+    bpf->stack_region.flag = (BPF_MEM_REGION_READ | BPF_MEM_REGION_WRITE);
+
+    bpf->stack_region.next = &bpf->arg_region;
+
+    bpf->arg_region.start = ctx;
+    bpf->arg_region.len = ctx_len;
+    bpf->arg_region.flag = (BPF_MEM_REGION_READ | BPF_MEM_REGION_WRITE);
+
     return bpf_run(bpf, ctx, result);
 }
 
@@ -54,14 +64,14 @@ int bpf_hook_install(bpf_hook_t *hook, bpf_hook_trigger_t trigger) {
     return 0;
 }
 
-int bpf_hook_execute(bpf_hook_trigger_t trigger, void *ctx, int64_t *script_res)
+int bpf_hook_execute(bpf_hook_trigger_t trigger, void *ctx, size_t ctx_size, int64_t *script_res)
 {
     assert(trigger < BPF_HOOK_NUM);
 
     int res = BPF_OK;
 
     for (bpf_hook_t *h = _hooks[trigger]; h; h = h->next) {
-        res = bpf_execute(h->application, ctx, script_res);
+        res = bpf_execute(h->application, ctx, ctx_size, script_res);
         h->executions++;
         if ((res == BPF_OK) && !_continue(h, script_res)) {
             break;

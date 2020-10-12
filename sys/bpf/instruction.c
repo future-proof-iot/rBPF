@@ -15,6 +15,48 @@
 #include "bpf/instruction.h"
 #include "bpf/call.h"
 
+#define ENABLE_DEBUG (1)
+#include "debug.h"
+
+static inline size_t opcode2size(uint8_t opcode)
+{
+    static const size_t lookup[] = {
+        [0] = 4,
+        [1] = 2,
+        [2] = 1,
+        [3] = 8,
+    };
+
+    unsigned size = (opcode >> 3) & 0x03;
+    return lookup[size];
+}
+
+static int _check_mem(const bpf_t *bpf, uint8_t opcode, const intptr_t addr, uint8_t type)
+{
+    const intptr_t end = addr + opcode2size(opcode);
+    for (const bpf_mem_region_t *region = &bpf->stack_region; region; region = region->next) {
+        if ((addr  >= (intptr_t)region->start) &&
+                (end <= (intptr_t)(region->start + region->len)) &&
+                (region->flag & type)) {
+
+            return 0;
+        }
+    }
+
+    DEBUG("Denied access to %p with len %u\n",(void*)addr, end - addr);
+    return -1;
+}
+
+static int _check_load(const bpf_t *bpf, uint8_t opcode, const intptr_t addr)
+{
+    return _check_mem(bpf, opcode, addr, BPF_MEM_REGION_READ);
+}
+
+static int _check_store(const bpf_t *bpf, uint8_t opcode, const intptr_t addr)
+{
+    return _check_mem(bpf, opcode, addr, BPF_MEM_REGION_WRITE);
+}
+
 static bpf_call_t _bpf_get_call(uint32_t num)
 {
     switch(num) {
@@ -176,21 +218,27 @@ static int _jump(const bpf_instruction_t **pc, uint64_t *src, uint64_t *dst)
     return BPF_OK;
 }
 
-static int _load_x(const bpf_instruction_t *instruction, uint64_t *regmap)
+static int _load_x(const bpf_t *bpf, const bpf_instruction_t *instruction, uint64_t *regmap)
 {
-    uint8_t *src = (uint8_t*)(uintptr_t)regmap[instruction->src];
+    const uint8_t *src = (uint8_t*)(uintptr_t)regmap[instruction->src];
+    intptr_t addr = (intptr_t)(src + instruction->offset);
+
+    if (_check_load(bpf, instruction->opcode, addr) < 0) {
+        return BPF_ILLEGAL_MEM;
+    }
+
     switch(instruction->opcode) {
         case 0x79:
-            regmap[instruction->dst] = *(uint64_t*)(src + instruction->offset);
+            regmap[instruction->dst] = *(const uint64_t*)(src + instruction->offset);
             break;
         case 0x61:
-            regmap[instruction->dst] = *(uint32_t*)(src + instruction->offset);
+            regmap[instruction->dst] = *(const uint32_t*)(src + instruction->offset);
             break;
         case 0x69:
-            regmap[instruction->dst] = *(uint16_t*)(src + instruction->offset);
+            regmap[instruction->dst] = *(const uint16_t*)(src + instruction->offset);
             break;
         case 0x71:
-            regmap[instruction->dst] = *(uint8_t*)(src + instruction->offset);
+            regmap[instruction->dst] = *(const uint8_t*)(src + instruction->offset);
             break;
         default:
             return BPF_ILLEGAL_INSTRUCTION;
@@ -198,21 +246,27 @@ static int _load_x(const bpf_instruction_t *instruction, uint64_t *regmap)
     return BPF_OK;
 }
 
-static int _store(const bpf_instruction_t *instruction, uint64_t *regmap)
+static int _store(const bpf_t *bpf, const bpf_instruction_t *instruction, uint64_t *regmap)
 {
     uint8_t *dst = (uint8_t*)(uintptr_t)regmap[instruction->dst];
+    intptr_t addr = (intptr_t)(dst + instruction->offset);
+
+    if (_check_store(bpf, instruction->opcode, addr) < 0) {
+        return BPF_ILLEGAL_MEM;
+    }
+
     switch(instruction->opcode) {
         case 0x7a:
-            *(uint64_t*)(dst + instruction->offset) = instruction->immediate;
+            *(uint64_t*)addr = instruction->immediate;
             break;
         case 0x62:
-            *(uint32_t*)(dst + instruction->offset) = instruction->immediate;
+            *(uint32_t*)addr = instruction->immediate;
             break;
         case 0x6a:
-            *(uint16_t*)(dst + instruction->offset) = instruction->immediate;
+            *(uint16_t*)addr = instruction->immediate;
             break;
         case 0x72:
-            *(uint8_t*)(dst + instruction->offset) = instruction->immediate;
+            *(uint8_t*)addr = instruction->immediate;
             break;
         default:
             return BPF_ILLEGAL_INSTRUCTION;
@@ -220,21 +274,27 @@ static int _store(const bpf_instruction_t *instruction, uint64_t *regmap)
     return BPF_OK;
 }
 
-static int _store_x(const bpf_instruction_t *instruction, uint64_t *regmap)
+static int _store_x(const bpf_t *bpf, const bpf_instruction_t *instruction, uint64_t *regmap)
 {
     uint8_t *dst = (uint8_t*)(uintptr_t)regmap[instruction->dst];
+    intptr_t addr = (intptr_t)(dst + instruction->offset);
+
+    if (_check_store(bpf, instruction->opcode, addr) < 0) {
+        return BPF_ILLEGAL_MEM;
+    }
+
     switch(instruction->opcode) {
         case 0x7b:
-            *(uint64_t*)(dst + instruction->offset) = regmap[instruction->src];
+            *(uint64_t*)addr = regmap[instruction->src];
             break;
         case 0x63:
-            *(uint32_t*)(dst + instruction->offset) = regmap[instruction->src];
+            *(uint32_t*)addr = regmap[instruction->src];
             break;
         case 0x6b:
-            *(uint16_t*)(dst + instruction->offset) = regmap[instruction->src];
+            *(uint16_t*)addr = regmap[instruction->src];
             break;
         case 0x73:
-            *(uint8_t*)(dst + instruction->offset) = regmap[instruction->src];
+            *(uint8_t*)addr = regmap[instruction->src];
             break;
         default:
             return BPF_ILLEGAL_INSTRUCTION;
@@ -265,11 +325,11 @@ static int _instruction(bpf_t *bpf, uint64_t *regmap,
         case BPF_INSTRUCTION_CLS_LD:
             return _ld(pc, src, dst);
         case BPF_INSTRUCTION_CLS_ST:
-            return _store(instruction, regmap);
+            return _store(bpf, instruction, regmap);
         case BPF_INSTRUCTION_CLS_STX:
-            return _store_x(instruction, regmap);
+            return _store_x(bpf, instruction, regmap);
         case BPF_INSTRUCTION_CLS_LDX:
-            return _load_x(instruction, regmap);
+            return _load_x(bpf, instruction, regmap);
         default:
             return BPF_ILLEGAL_INSTRUCTION;
     }
@@ -305,6 +365,8 @@ int bpf_run(bpf_t *bpf, const void *ctx, int64_t *result)
                 break;
             }
             else {
+                intptr_t instruction = (uint8_t*)pc - bpf->application;
+                DEBUG("Illegal %d, access PC: 0x%x, loc: %u\n", res, instruction, instruction/8 );
                 return res;
             }
         }

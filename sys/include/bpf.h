@@ -67,6 +67,8 @@ struct bpf_mem_region {
     uint8_t flag;
 };
 
+#define BPF_FLAG_SETUP_DONE    0x01
+
 typedef struct {
     bpf_mem_region_t stack_region;
     bpf_mem_region_t arg_region;
@@ -75,6 +77,8 @@ typedef struct {
     uint8_t *stack;             /**< VM stack, must be a multiple of 8 bytes and aligned */
     size_t stack_size;          /**< VM stack size in bytes */
     btree_t btree;              /**< Local btree */
+    uint16_t flags;
+    uint32_t instruction_count;
 } bpf_t;
 
 typedef struct bpf_hook bpf_hook_t;
@@ -87,10 +91,14 @@ struct bpf_hook {
 };
 
 void bpf_init(void);
+void bpf_setup(bpf_t *bpf);
 
 int bpf_execute(bpf_t *bpf, void *ctx, size_t ctx_size, int64_t *result);
 
 int bpf_install_hook(bpf_t *bpf);
+
+void bpf_add_region(bpf_t *bpf, bpf_mem_region_t *region,
+                    void *start, size_t len, uint8_t flags);
 
 #ifdef __cplusplus
 }

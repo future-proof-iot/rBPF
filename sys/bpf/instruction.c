@@ -337,6 +337,7 @@ static int _instruction(bpf_t *bpf, uint64_t *regmap,
 
 int bpf_run(bpf_t *bpf, const void *ctx, int64_t *result)
 {
+    bpf->instruction_count = 0;
     uint64_t regmap[11] = { 0 };
     regmap[1] = (uint64_t)(uintptr_t)ctx;
     regmap[10] = (uint64_t)(uintptr_t)(bpf->stack + bpf->stack_size);
@@ -346,6 +347,7 @@ int bpf_run(bpf_t *bpf, const void *ctx, int64_t *result)
 
     while (!end) {
         int res = _instruction(bpf, regmap, &pc);
+        bpf->instruction_count++;
         if (res < 0) {
             if (pc->opcode == 0x85) {
                 bpf_call_t call = _bpf_get_call(pc->immediate);
@@ -376,6 +378,7 @@ int bpf_run(bpf_t *bpf, const void *ctx, int64_t *result)
         }
     }
 
+    DEBUG("Number of instructions: %"PRIu32"\n", bpf->instruction_count);
     *result = regmap[0];
     return BPF_OK;
 }

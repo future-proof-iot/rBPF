@@ -93,7 +93,8 @@ static bpf_call_t _bpf_get_call(uint32_t num)
 #define SRC regmap[instr->src]
 #define IMM instr->immediate
 
-#define CONT     { goto select_instr; }
+#define CONT       { goto select_instr; }
+#define CONT_JUMP  { goto jump_instr; }
 
 #define ALU(OPCODE, OP)         \
     ALU64_##OPCODE##_REG:         \
@@ -111,15 +112,11 @@ static bpf_call_t _bpf_get_call(uint32_t num)
 
 #define COND_JMP(SIGN, OPCODE, CMP_OP)              \
     JMP_##OPCODE##_REG:                  \
-        if ((SIGN##nt64_t) DST CMP_OP (SIGN##nt64_t)SRC) { \
-            instr += instr->offset;     \
-        }                               \
-        CONT;                           \
+        jump_cond = (SIGN##nt64_t) DST CMP_OP (SIGN##nt64_t)SRC; \
+        CONT_JUMP;                           \
     JMP_##OPCODE##_IMM:                 \
-        if ((SIGN##nt64_t) DST CMP_OP (SIGN##nt64_t)IMM) { \
-            instr += instr->offset;     \
-        }                               \
-        CONT;
+        jump_cond = (SIGN##nt64_t) DST CMP_OP (SIGN##nt64_t)IMM; \
+        CONT_JUMP;                           \
 
 #define ALU_OPCODE_REG(OPCODE, VALUE) \
     [VALUE | 0x0C ] = &&ALU32_##OPCODE##_REG, \
@@ -152,7 +149,7 @@ int bpf_run(bpf_t *bpf, const void *ctx, int64_t *result)
     regmap[10] = (uint64_t)(uintptr_t)(bpf->stack + bpf->stack_size);
 
     const bpf_instruction_t *instr = (const bpf_instruction_t*)bpf->application;
-    instr--;
+    bool jump_cond = false;
 
     const void * const _jumptable[256] = {
         ALU_OPCODE(ADD, 0x00),
@@ -193,9 +190,17 @@ int bpf_run(bpf_t *bpf, const void *ctx, int64_t *result)
         [0x95] = &&OPCODE_RETURN,
     };
 
+    goto bpf_start;
+
+jump_instr:
+    if (jump_cond) {
+        instr += instr->offset;
+    }
+    /* Intentionally falls through to select_instr */
 select_instr:
-    bpf->instruction_count++;
     instr++;
+bpf_start:
+    bpf->instruction_count++;
     goto *_jumptable[instr->opcode];
 
     ALU(ADD,  +)
@@ -273,9 +278,8 @@ MEM_LDDW_IMM:
 
 
 JUMP_ALWAYS:
-    instr += instr->offset;
-    CONT;
-
+    jump_cond = 1;
+    CONT_JUMP;
     COND_JMP(ui, EQ, ==)
     COND_JMP(ui, GT, >)
     COND_JMP(ui, GE, >=)

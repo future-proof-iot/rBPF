@@ -18,22 +18,9 @@
 #define ENABLE_DEBUG (0)
 #include "debug.h"
 
-static inline size_t opcode2size(uint8_t opcode)
+static int _check_mem(const bpf_t *bpf, uint8_t size, const intptr_t addr, uint8_t type)
 {
-    static const size_t lookup[] = {
-        [0] = 4,
-        [1] = 2,
-        [2] = 1,
-        [3] = 8,
-    };
-
-    unsigned size = (opcode >> 3) & 0x03;
-    return lookup[size];
-}
-
-static int _check_mem(const bpf_t *bpf, uint8_t opcode, const intptr_t addr, uint8_t type)
-{
-    const intptr_t end = addr + opcode2size(opcode);
+    const intptr_t end = addr + size;
     for (const bpf_mem_region_t *region = &bpf->stack_region; region; region = region->next) {
         if ((addr  >= (intptr_t)region->start) &&
                 (end <= (intptr_t)(region->start + region->len)) &&
@@ -47,14 +34,29 @@ static int _check_mem(const bpf_t *bpf, uint8_t opcode, const intptr_t addr, uin
     return -1;
 }
 
-static int _check_load(const bpf_t *bpf, uint8_t opcode, const intptr_t addr)
+static inline int _check_load(const bpf_t *bpf, uint8_t size, const intptr_t addr)
 {
-    return _check_mem(bpf, opcode, addr, BPF_MEM_REGION_READ);
+    return _check_mem(bpf, size, addr, BPF_MEM_REGION_READ);
 }
 
-static int _check_store(const bpf_t *bpf, uint8_t opcode, const intptr_t addr)
+static inline int _check_store(const bpf_t *bpf, uint8_t size, const intptr_t addr)
 {
-    return _check_mem(bpf, opcode, addr, BPF_MEM_REGION_WRITE);
+    return _check_mem(bpf, size, addr, BPF_MEM_REGION_WRITE);
+}
+
+static int _preflight_checks(const bpf_t *bpf)
+{
+    if (bpf->application_len % sizeof(bpf_instruction_t)) {
+        return BPF_ILLEGAL_LEN;
+    }
+
+    size_t num_instructions = bpf->application_len/sizeof(bpf_instruction_t);
+    const bpf_instruction_t *instr = (const bpf_instruction_t*)bpf->application;
+
+    if (instr[num_instructions - 1].opcode != 0x95) {
+        return BPF_NO_RETURN;
+    }
+    return BPF_OK;
 }
 
 static bpf_call_t _bpf_get_call(uint32_t num)
@@ -96,19 +98,30 @@ static bpf_call_t _bpf_get_call(uint32_t num)
 #define CONT       { goto select_instr; }
 #define CONT_JUMP  { goto jump_instr; }
 
+
+#if (CONFIG_BPF_ENABLE_ALU32)
 #define ALU(OPCODE, OP)         \
     ALU64_##OPCODE##_REG:         \
         DST = DST OP SRC;       \
         CONT;                   \
-    ALU32_##OPCODE##_REG:         \
-        DST = (uint32_t) DST OP (uint32_t) SRC;   \
-        CONT;                   \
     ALU64_##OPCODE##_IMM:       \
         DST = DST OP IMM;       \
+        CONT;                   \
+    ALU32_##OPCODE##_REG:         \
+        DST = (uint32_t) DST OP (uint32_t) SRC;   \
         CONT;                   \
     ALU32_##OPCODE##_IMM:           \
         DST = (uint32_t) DST OP (uint32_t) IMM;   \
         CONT;
+#else
+#define ALU(OPCODE, OP)         \
+    ALU64_##OPCODE##_REG:         \
+        DST = DST OP SRC;       \
+        CONT;                   \
+    ALU64_##OPCODE##_IMM:       \
+        DST = DST OP IMM;       \
+        CONT;
+#endif
 
 #define COND_JMP(SIGN, OPCODE, CMP_OP)              \
     JMP_##OPCODE##_REG:                  \
@@ -118,6 +131,7 @@ static bpf_call_t _bpf_get_call(uint32_t num)
         jump_cond = (SIGN##nt64_t) DST CMP_OP (SIGN##nt64_t)IMM; \
         CONT_JUMP;                           \
 
+#if CONFIG_BPF_ENABLE_ALU32
 #define ALU_OPCODE_REG(OPCODE, VALUE) \
     [VALUE | 0x0C ] = &&ALU32_##OPCODE##_REG, \
     [VALUE | 0x0F ] = &&ALU64_##OPCODE##_REG
@@ -125,6 +139,13 @@ static bpf_call_t _bpf_get_call(uint32_t num)
 #define ALU_OPCODE_IMM(OPCODE, VALUE)   \
     [VALUE | 0x04 ] = &&ALU32_##OPCODE##_IMM, \
     [VALUE | 0x07 ] = &&ALU64_##OPCODE##_IMM
+#else
+#define ALU_OPCODE_REG(OPCODE, VALUE) \
+    [VALUE | 0x0F ] = &&ALU64_##OPCODE##_REG
+
+#define ALU_OPCODE_IMM(OPCODE, VALUE)   \
+    [VALUE | 0x07 ] = &&ALU64_##OPCODE##_IMM
+#endif
 
 #define ALU_OPCODE(OPCODE, VALUE) \
     ALU_OPCODE_REG(OPCODE, VALUE), \
@@ -151,7 +172,12 @@ int bpf_run(bpf_t *bpf, const void *ctx, int64_t *result)
     const bpf_instruction_t *instr = (const bpf_instruction_t*)bpf->application;
     bool jump_cond = false;
 
-    const void * const _jumptable[256] = {
+    res = _preflight_checks(bpf);
+    if (res < 0) {
+        return res;
+    }
+
+    static const void * const _jumptable[256] = {
         ALU_OPCODE(ADD, 0x00),
         ALU_OPCODE(SUB, 0x10),
         ALU_OPCODE(MUL, 0x20),
@@ -195,7 +221,13 @@ int bpf_run(bpf_t *bpf, const void *ctx, int64_t *result)
 jump_instr:
     if (jump_cond) {
         instr += instr->offset;
+        if (((intptr_t)instr >= (intptr_t)(bpf->application + bpf->application_len))
+                || ((intptr_t)instr < (intptr_t)bpf->application)) {
+            res = BPF_ILLEGAL_JUMP;
+            goto exit;
+        }
     }
+
     /* Intentionally falls through to select_instr */
 select_instr:
     instr++;
@@ -218,6 +250,7 @@ ALU64_NEG_REG:
     DST = -(int64_t)DST;
     CONT;
 
+#if (CONFIG_BPF_ENABLE_ALU32)
 ALU32_NEG_REG:
     DST = (int32_t)DST;
     CONT;
@@ -229,6 +262,7 @@ ALU32_MOV_IMM:
 ALU32_MOV_REG:
     DST = (uint32_t)SRC;
     CONT;
+#endif
 ALU64_MOV_IMM:
     DST = (uint32_t)IMM;
     CONT;
@@ -243,12 +277,14 @@ ALU64_ARSH_REG:
 ALU64_ARSH_IMM:
     (*(int64_t*) &DST) >>= IMM;
     CONT;
+#if (CONFIG_BPF_ENABLE_ALU32)
 ALU32_ARSH_REG:
     DST = (int32_t)DST >> SRC;
     CONT;
 ALU32_ARSH_IMM:
     DST =  (int32_t)DST >> IMM;
     CONT;
+#endif
 
 MEM_LDDW_IMM:
     DST = (uint64_t)instr->immediate;
@@ -258,15 +294,21 @@ MEM_LDDW_IMM:
 
 #define MEM(SIZEOP, SIZE)                     \
       MEM_STX_##SIZEOP:                       \
-          _check_store(bpf, instr->opcode, DST + instr->offset); \
+          if (_check_store(bpf, sizeof(SIZE), DST + instr->offset) < 0) { \
+              goto mem_error; \
+          } \
           *(SIZE *)(uintptr_t)(DST + instr->offset) = SRC;   \
           CONT;                               \
       MEM_ST_##SIZEOP:                        \
-          _check_store(bpf, instr->opcode, DST + instr->offset); \
+          if (_check_store(bpf, sizeof(SIZE), DST + instr->offset) < 0) { \
+              goto mem_error; \
+          } \
           *(SIZE *)(uintptr_t)(DST + instr->offset) = IMM;   \
           CONT;                               \
       MEM_LDX_##SIZEOP:                       \
-          _check_load(bpf, instr->opcode, DST + instr->offset); \
+          if (_check_load(bpf, sizeof(SIZE), SRC + instr->offset) < 0) { \
+              goto mem_error; \
+          } \
           DST = *(const SIZE *)(uintptr_t)(SRC + instr->offset);   \
           CONT;
 
@@ -310,6 +352,8 @@ OPCODE_CALL:
 OPCODE_RETURN:
     goto exit;
 
+mem_error:
+    res = BPF_ILLEGAL_MEM;
 
 exit:
 

@@ -32,6 +32,10 @@
 extern "C" {
 #endif
 
+#ifndef CONFIG_BPF_ENABLE_ALU32
+#define CONFIG_BPF_ENABLE_ALU32 (0)
+#endif
+
 typedef enum {
     BPF_POLICY_CONTINUE,            /**< Always execute next hook */
     BPF_POLICY_ABORT_ON_NEGATIVE,   /**< Execute next script unless result is negative */
@@ -51,6 +55,8 @@ enum {
     BPF_ILLEGAL_MEM         = -2,
     BPF_ILLEGAL_JUMP        = -3,
     BPF_ILLEGAL_CALL        = -4,
+    BPF_ILLEGAL_LEN         = -5,
+    BPF_NO_RETURN           = -6,
 };
 
 typedef struct bpf_mem_region bpf_mem_region_t;

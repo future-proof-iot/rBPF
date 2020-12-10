@@ -1,5 +1,5 @@
-BINS = sample_gcoap.bin
-OBJS = sample_gcoap.o
+BINS = sample_gcoap.bin sample_gcoap2.bin
+OBJS = sample_gcoap.o sample_gcoap2.o
 
 LLC ?= llc
 CLANG ?= clang

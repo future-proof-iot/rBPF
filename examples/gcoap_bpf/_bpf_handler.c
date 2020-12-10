@@ -99,9 +99,14 @@ static ssize_t _bpf_handler(coap_pkt_t *pdu, uint8_t *buf, size_t len, void *ctx
         return -1;
     }
 
+    bpf_setup(&_bpf);
     int64_t result = -1;
-    int res = bpf_execute(&_bpf, &bpf_ctx, &result);
+    uint32_t start = xtimer_now_usec();
+    int res = bpf_execute(&_bpf, &bpf_ctx, sizeof(bpf_ctx), &result);
+    uint32_t stop = xtimer_now_usec();
     printf("Execution done res=%i, result=%i\n", res, (int)result);
+    printf("duration: %"PRIu32" us\n",
+           (stop - start));
     return (ssize_t)result;
 }
 

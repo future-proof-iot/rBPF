@@ -18,6 +18,8 @@
 #define ENABLE_DEBUG (0)
 #include "debug.h"
 
+typedef int dont_be_pedantic;
+
 static int _check_mem(const bpf_t *bpf, uint8_t size, const intptr_t addr, uint8_t type)
 {
     const intptr_t end = addr + size;
@@ -85,6 +87,14 @@ static bpf_call_t _bpf_get_call(uint32_t num)
             return &bpf_vm_gcoap_resp_init;
         case BPF_FUNC_BPF_COAP_OPT_FINISH:
             return &bpf_vm_coap_opt_finish;
+        case BPF_FUNC_BPF_COAP_ADD_FORMAT:
+            return &bpf_vm_coap_add_format;
+        case BPF_FUNC_BPF_COAP_GET_PDU:
+            return &bpf_vm_coap_get_pdu;
+#endif
+#ifdef MODULE_FMT
+        case BPF_FUNC_BPF_FMT_S16_DFP:
+            return &bpf_vm_fmt_s16_dfp;
 #endif
         default:
             return NULL;
@@ -178,6 +188,7 @@ int bpf_run(bpf_t *bpf, const void *ctx, int64_t *result)
     }
 
     static const void * const _jumptable[256] = {
+        [0 ... 255] = &&invalid_instruction,
         ALU_OPCODE(ADD, 0x00),
         ALU_OPCODE(SUB, 0x10),
         ALU_OPCODE(MUL, 0x20),
@@ -337,12 +348,13 @@ OPCODE_CALL:
     {
         bpf_call_t call = _bpf_get_call(instr->immediate);
         if (call) {
-                    regmap[0] = (*(call))(bpf,
-                                          regmap[1],
-                                          regmap[2],
-                                          regmap[3],
-                                          regmap[4],
-                                          regmap[5]);
+            regmap[0] = (*(call))(bpf,
+                                  regmap[1],
+                                  regmap[2],
+                                  regmap[3],
+                                  regmap[4],
+                                  regmap[5]);
+            CONT;
         }
         else {
             res = BPF_ILLEGAL_CALL;
@@ -350,6 +362,10 @@ OPCODE_CALL:
         }
     }
 OPCODE_RETURN:
+    goto exit;
+
+invalid_instruction:
+    res = BPF_ILLEGAL_INSTRUCTION;
     goto exit;
 
 mem_error:

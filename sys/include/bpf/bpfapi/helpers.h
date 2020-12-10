@@ -42,6 +42,11 @@ static int (*bpf_saul_reg_read)(bpf_saul_reg_t *dev, phydat_t *data) = (void *) 
 /* CoAP calls */
 static void (*bpf_gcoap_resp_init)(bpf_coap_ctx_t *ctx, unsigned resp_code) = (void *) BPF_FUNC_BPF_GCOAP_RESP_INIT;
 static ssize_t (*bpf_coap_opt_finish)(bpf_coap_ctx_t *ctx, unsigned opt) = (void *) BPF_FUNC_BPF_COAP_OPT_FINISH;
+static void (*bpf_coap_add_format)(bpf_coap_ctx_t *ctx, uint32_t format) = (void *) BPF_FUNC_BPF_COAP_ADD_FORMAT;
+static uint8_t *(*bpf_coap_get_pdu)(bpf_coap_ctx_t *ctx) = (void *) BPF_FUNC_BPF_COAP_GET_PDU;
+
+/* FMT calls */
+static size_t (*bpf_fmt_s16_dfp)(char *out, int16_t val, int fp_digits) = (void *) BPF_FUNC_BPF_FMT_S16_DFP;
 
 
 #ifdef __cplusplus

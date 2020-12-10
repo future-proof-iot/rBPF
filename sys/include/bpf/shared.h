@@ -44,6 +44,10 @@ enum {
     /* (g)coap functions */
     BPF_FUNC_BPF_GCOAP_RESP_INIT = 0x40,
     BPF_FUNC_BPF_COAP_OPT_FINISH = 0x41,
+    BPF_FUNC_BPF_COAP_ADD_FORMAT = 0x42,
+    BPF_FUNC_BPF_COAP_GET_PDU = 0x43,
+
+    BPF_FUNC_BPF_FMT_S16_DFP = 0x50,
 };
 
 /* Helper structs */

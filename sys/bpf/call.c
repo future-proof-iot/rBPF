@@ -24,6 +24,7 @@
 #endif
 #include "saul.h"
 #include "saul_reg.h"
+#include "fmt.h"
 
 uint32_t bpf_vm_printf(bpf_t *bpf, uint32_t fmt, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
 {
@@ -130,6 +131,18 @@ uint32_t bpf_vm_gcoap_resp_init(bpf_t *bpf, uint32_t coap_ctx_p, uint32_t resp_c
     return 0;
 }
 
+uint32_t bpf_vm_coap_add_format(bpf_t *bpf, uint32_t coap_ctx_p, uint32_t format, uint32_t a3, uint32_t a4, uint32_t a5)
+{
+    (void)bpf;
+    (void)a3;
+    (void)a4;
+    (void)a5;
+
+    bpf_coap_ctx_t *coap_ctx = (bpf_coap_ctx_t *)(intptr_t)coap_ctx_p;
+    ssize_t res = coap_opt_add_format(coap_ctx->pkt, format);
+    return (uint32_t)res;
+}
+
 uint32_t bpf_vm_coap_opt_finish(bpf_t *bpf, uint32_t coap_ctx_p, uint32_t flags_u, uint32_t a3, uint32_t a4, uint32_t a5)
 {
     (void)bpf;
@@ -141,6 +154,31 @@ uint32_t bpf_vm_coap_opt_finish(bpf_t *bpf, uint32_t coap_ctx_p, uint32_t flags_
     uint16_t flags = (uint16_t)flags_u;
 
     ssize_t res = coap_opt_finish(coap_ctx->pkt, flags);
+    return (uint32_t)res;
+}
+
+uint32_t bpf_vm_coap_get_pdu(bpf_t *bpf, uint32_t coap_ctx_p, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
+{
+    (void)bpf;
+    (void)a2;
+    (void)a3;
+    (void)a4;
+    (void)a5;
+
+    bpf_coap_ctx_t *coap_ctx = (bpf_coap_ctx_t *)(intptr_t)coap_ctx_p;
+    return (uint32_t)(intptr_t)((coap_pkt_t*)coap_ctx->pkt)->payload;
+}
+#endif
+
+#ifdef MODULE_FMT
+uint32_t bpf_vm_fmt_s16_dfp(bpf_t *bpf, uint32_t out_p, uint32_t val, uint32_t fp_digits, uint32_t a4, uint32_t a5)
+{
+    (void)bpf;
+    (void)a4;
+    (void)a5;
+
+    char *out = (char*)(intptr_t)out_p;
+    size_t res = fmt_s16_dfp(out, (int16_t)val, (int)fp_digits);
     return (uint32_t)res;
 }
 #endif

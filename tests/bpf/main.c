@@ -82,6 +82,7 @@ static void tests_bpf_run1(void)
     };
     unsigned int ctx = 8;
     int64_t result = 0;
+    bpf_setup(&bpf);
     TEST_ASSERT_EQUAL_INT(0, bpf_execute(&bpf, &ctx, sizeof(ctx), &result));
     TEST_ASSERT_EQUAL_INT(105, (int)result);
 }
@@ -96,6 +97,7 @@ static void tests_bpf_run2(void)
     };
     unsigned int ctx = 8;
     int64_t result = 0;
+    bpf_setup(&bpf);
     TEST_ASSERT_EQUAL_INT(0, bpf_execute(&bpf, &ctx, sizeof(ctx), &result));
     TEST_ASSERT_EQUAL_INT(16, (int)result);
 }
@@ -110,6 +112,7 @@ static void tests_bpf_storage(void)
     };
     unsigned int ctx = 8;
     int64_t result = 0;
+    bpf_setup(&bpf);
     TEST_ASSERT_EQUAL_INT(0, bpf_execute(&bpf, &ctx, sizeof(ctx), &result));
 
     uint32_t val;
@@ -142,6 +145,7 @@ static void tests_bpf_saul(void)
     };
     unsigned int ctx = 0;
     int64_t result = 0;
+    bpf_setup(&bpf);
     TEST_ASSERT_EQUAL_INT(0, bpf_execute(&bpf, &ctx, sizeof(ctx), &result));
 
     TEST_ASSERT_EQUAL_INT(0, result);

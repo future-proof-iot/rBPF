@@ -26,7 +26,7 @@
 # - llc/clang are available and support "bpf" target; check with "llc --verison"
 #
 
-OBJS = btree.o sample_saul.o sample_storage.o fletcher32.o sample_test.o
+OBJS = btree.o sample_saul.o sample_storage.o fletcher32.o sample_test.o sample.o
 
 LLC ?= llc
 CLANG ?= clang
@@ -37,6 +37,12 @@ RIOTBASE = ../../..
 
 BPFINCLUDE = -I$(RIOTBASE)/sys/include/ -I$(RIOTBASE)/drivers/include/ -I$(RIOTBASE)/core/include
 
+LLC_FLAGS ?=
+
+LLC_FLAGS += -march=bpf
+ifeq (BPF_ENABLE_ALU32,1)
+  LLC_FLAGS += -mattr=+alu32
+endif
 
 all: $(OBJS)
 
@@ -55,4 +61,4 @@ $(OBJS):  %.o:%.c
 	        -Wno-address-of-packed-member -Wno-tautological-compare \
 	        -Wno-unknown-warning-option \
 	        $(BPFINCLUDE) $(LINUXINCLUDE) \
-	        $(EXTRA_CFLAGS) -c $< -o -| $(LLC) -march=bpf -filetype=obj -o $@
+	        $(EXTRA_CFLAGS) -c $< -o -| $(LLC) $(LLC_FLAGS) -filetype=obj -o $@
